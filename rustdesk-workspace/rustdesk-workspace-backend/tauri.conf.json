@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "identifier": "com.rustdesk.workspace",
   "build": {
-    "beforeDevCommand": "cd /Users/code/work/rustdesk-workspace/rustdesk-workspace-frontend && npm run dev",
+    "beforeDevCommand": "cd ../rustdesk-workspace-frontend && pnpm dev",
     "devUrl": "http://localhost:5173",
-    "beforeBuildCommand": "cd /Users/code/work/rustdesk-workspace/rustdesk-workspace-frontend && npm run build",
-    "frontendDist": "/Users/code/work/rustdesk-workspace/rustdesk-workspace-frontend/dist"
+    "beforeBuildCommand": "cd ../rustdesk-workspace-frontend && pnpm build",
+    "frontendDist": "../rustdesk-workspace-frontend/dist"
   },
   "app": {
     "windows": [
