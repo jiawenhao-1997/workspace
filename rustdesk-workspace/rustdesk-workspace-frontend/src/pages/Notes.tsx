@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { api } from "../api";
 import type { Note } from "../types";
 import { useAppStore } from "../store";
+import { useTranslation } from "react-i18next";
 import {
   Plus,
   Search,
@@ -20,6 +21,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 export function Notes() {
+  const { t } = useTranslation();
   const [notes, setNotes] = useState<Note[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -107,8 +109,48 @@ export function Notes() {
     );
   }, [notes, search]);
 
+  // P1-1: FTS5 全文搜索结果（含高亮片段与相关度），与上面的客户端过滤互不影响
+  const [ftsResults, setFtsResults] = useState<
+    Array<Note & { rank: number; snippet: string }>
+  >([]);
+  const [ftsLoading, setFtsLoading] = useState(false);
+
+  useEffect(() => {
+    const q = search.trim();
+    if (!q) {
+      setFtsResults([]);
+      return;
+    }
+    // 防抖：用户连续输入时仅触发最后一次请求
+    const timer = setTimeout(async () => {
+      setFtsLoading(true);
+      try {
+        // FTS5 至少需 3 字符才有命中，短查询回退到普通 LIKE 搜索
+        let results: Array<Note & { rank: number; snippet: string }>;
+        if (q.replace(/\s/g, "").length >= 3) {
+          results = await api.searchNotesFts(q, 50);
+        } else {
+          results = await api.searchNotes(q);
+        }
+        setFtsResults(results);
+      } catch (e) {
+        console.error("搜索失败:", e);
+        setFtsResults([]);
+      } finally {
+        setFtsLoading(false);
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const finalFiltered = useMemo(() => {
+    // 有搜索关键词时优先展示 FTS5 结果（按相关度排序 + 高亮）
+    if (search.trim()) return ftsResults as unknown as Note[];
+    return notes;
+  }, [search, ftsResults, notes]);
+
   async function deleteNote(id: string) {
-    if (!confirm("确定删除这条笔记吗？")) return;
+    if (!confirm(t("notes.confirmDelete"))) return;
     try {
       await api.deleteNote(id);
       if (activeId === id) setActiveId(null);
@@ -133,11 +175,11 @@ export function Notes() {
       <div className="w-[300px] flex-shrink-0 border-r border-[var(--border)] bg-[var(--bg-primary)] flex flex-col">
         <div className="border-b border-[var(--border)] px-4 py-4">
           <div className="flex items-center justify-between mb-3">
-            <h1 className="text-[18px] font-semibold">笔记</h1>
+            <h1 className="text-[18px] font-semibold">{t("sidebar.notes")}</h1>
             <button
               onClick={() => setShowCreate(true)}
               className="btn btn-primary btn-icon"
-              aria-label="新建"
+              aria-label={t("common.new")}
             >
               <Plus size={14} />
             </button>
@@ -149,18 +191,22 @@ export function Notes() {
               onChange={(e) => setSearch(e.target.value)}
               onCompositionStart={(e) => e.stopPropagation()}
               onCompositionEnd={(e) => setSearch(e.target.value)}
-              placeholder="搜索笔记..."
+              placeholder={t("notes.searchPlaceholder")}
               className="flex-1 bg-transparent text-[13px] outline-none"
             />
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-2 py-2">
-          {filtered.length === 0 ? (
+          {ftsLoading && search.trim() ? (
+            <div className="flex flex-col items-center justify-center h-full text-[var(--text-tertiary)] px-4 text-center">
+              <div className="text-[12px]">{t("notes.searching")}</div>
+            </div>
+          ) : finalFiltered.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-[var(--text-tertiary)] px-4 text-center">
               <FileText size={28} className="mb-3 opacity-30" />
               <div className="text-[13px] mb-3">
-                {search ? "没有匹配的笔记" : "还没有笔记"}
+                {search ? t("notes.noResults") : t("notes.noNotes")}
               </div>
               {!search && (
                 <button
@@ -168,12 +214,14 @@ export function Notes() {
                   className="btn btn-secondary"
                 >
                   <Plus size={14} />
-                  新建笔记
+                  {t("notes.newNote")}
                 </button>
               )}
             </div>
           ) : (
-            filtered.map((n) => (
+            finalFiltered.map((n) => {
+              const snippet = (n as any).snippet as string | undefined;
+              return (
               <button
                 key={n.id}
                 onClick={() => setActiveId(n.id)}
@@ -190,20 +238,30 @@ export function Notes() {
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="text-[13px] font-medium truncate">
-                      {n.title || "无标题"}
+                      {n.title || t("notes.untitled")}
                     </div>
-                    <div className="text-[11px] text-[var(--text-tertiary)] truncate mt-0.5">
-                      {n.content.replace(/[#*`>\-\[\]]/g, "").trim().substring(0, 60) || "空笔记"}
+                    <div
+                      className="text-[11px] text-[var(--text-tertiary)] truncate mt-0.5"
+                      // P1-1: FTS5 高亮片段（带 <mark> 标签）
+                      dangerouslySetInnerHTML={
+                        snippet
+                          ? { __html: snippet }
+                          : undefined
+                      }
+                    >
+                      {!snippet &&
+                        (n.content.replace(/[#*`>\-\[\]]/g, "").trim().substring(0, 60) || t("notes.emptyNote"))}
                     </div>
                     <div className="flex items-center gap-2 mt-1 text-[10px] text-[var(--text-tertiary)]">
                       <span>{formatRelativeTime(n.updated_at)}</span>
                       <span>·</span>
-                      <span>{n.word_count} 字</span>
+                      <span>{n.word_count} {t("notes.wordCount")}</span>
                     </div>
                   </div>
                 </div>
               </button>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -225,7 +283,7 @@ export function Notes() {
                   );
                 }}
                 onCompositionStart={(e) => e.stopPropagation()}
-                placeholder="无标题"
+                placeholder={t("notes.untitled")}
                 className="text-[18px] font-semibold bg-transparent outline-none flex-1"
               />
               <div className="flex items-center gap-1">
@@ -255,14 +313,14 @@ export function Notes() {
                     "btn btn-ghost btn-icon",
                     active.is_pinned && "text-warning"
                   )}
-                  aria-label="置顶"
+                  aria-label={t("notes.pin")}
                 >
                   <Pin size={14} />
                 </button>
                 <button
                   onClick={() => deleteNote(active.id)}
                   className="btn btn-danger btn-icon"
-                  aria-label="删除"
+                  aria-label={t("common.delete")}
                 >
                   <Trash2 size={14} />
                 </button>
@@ -277,7 +335,7 @@ export function Notes() {
                   onChange={(e) => debouncedUpdate(e.target.value)}
                   onCompositionStart={(e) => e.stopPropagation()}
                   onCompositionEnd={(e) => debouncedUpdate(e.target.value)}
-                  placeholder="开始书写...支持 Markdown 与 [[双向链接]]"
+                  placeholder={t("notes.placeholder")}
                   className={cn(
                     "flex-1 p-6 bg-transparent outline-none text-[14px] leading-[1.9] resize-none",
                     mode === "split" && "border-r border-[var(--border)]"
@@ -294,9 +352,9 @@ export function Notes() {
 
             <div className="flex items-center justify-between border-t border-[var(--border)] px-6 py-2 text-[11px] text-[var(--text-tertiary)]">
               <div className="flex items-center gap-3">
-                <span>{active.word_count} 字</span>
+                <span>{active.word_count} {t("notes.wordCount")}</span>
                 <span>·</span>
-                <span>{active.content.length} 字符</span>
+                <span>{active.content.length} {t("notes.charCount")}</span>
                 {parseTags(active.tags).length > 0 && (
                   <>
                     <span>·</span>
@@ -304,19 +362,19 @@ export function Notes() {
                   </>
                 )}
               </div>
-              <span>最后编辑 {formatRelativeTime(active.updated_at)}</span>
+              <span>{t("notes.lastEdited")} {formatRelativeTime(active.updated_at)}</span>
             </div>
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-[var(--text-tertiary)]">
             <FileText size={48} className="mb-4 opacity-20" />
-            <div className="text-[14px] mb-4">选择笔记开始阅读</div>
+            <div className="text-[14px] mb-4">{t("notes.selectNote")}</div>
             <button
               onClick={() => setShowCreate(true)}
               className="btn btn-primary"
             >
               <Plus size={14} />
-              新建笔记
+              {t("notes.newNote")}
             </button>
           </div>
         )}
@@ -384,6 +442,7 @@ function NoteSidebar({
   note: Note;
   onUpdate: () => void;
 }) {
+  const { t } = useTranslation();
   const [tagInput, setTagInput] = useState("");
   const tags = parseTags(note.tags);
 
@@ -413,19 +472,19 @@ function NoteSidebar({
     <div className="p-4 space-y-5">
       <div>
         <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-2">
-          元信息
+          {t("notes.metadata")}
         </div>
         <div className="space-y-2 text-[12px]">
           <div className="flex items-center justify-between">
-            <span className="text-[var(--text-tertiary)]">创建</span>
+            <span className="text-[var(--text-tertiary)]">{t("notes.created")}</span>
             <span>{formatRelativeTime(note.created_at)}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[var(--text-tertiary)]">修改</span>
+            <span className="text-[var(--text-tertiary)]">{t("notes.modified")}</span>
             <span>{formatRelativeTime(note.updated_at)}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[var(--text-tertiary)]">字数</span>
+            <span className="text-[var(--text-tertiary)]">{t("notes.words")}</span>
             <span>{note.word_count}</span>
           </div>
         </div>
@@ -433,17 +492,17 @@ function NoteSidebar({
 
       <div>
         <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-2">
-          标签
+          {t("notes.tags")}
         </div>
         <div className="flex flex-wrap gap-1.5 mb-2">
-          {tags.map((t) => (
+          {tags.map((tag) => (
             <span
-              key={t}
+              key={tag}
               className="pill bg-accent-50 text-accent-500"
             >
-              #{t}
+              #{tag}
               <button
-                onClick={() => removeTag(t)}
+                onClick={() => removeTag(tag)}
                 className="ml-1 -mr-1 opacity-60 hover:opacity-100"
               >
                 <X size={10} />
@@ -458,7 +517,7 @@ function NoteSidebar({
             onKeyDown={(e) => {
               if (e.key === "Enter") addTag();
             }}
-            placeholder="添加标签..."
+            placeholder={t("notes.addTagsPlaceholder")}
             className="input flex-1 h-7 text-[11px]"
           />
           <button onClick={addTag} className="btn btn-secondary btn-icon h-7">
@@ -469,13 +528,13 @@ function NoteSidebar({
 
       <div>
         <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-2">
-          提示
+          {t("notes.hints")}
         </div>
         <div className="text-[11px] text-[var(--text-secondary)] leading-relaxed space-y-1.5">
-          <div>• 使用 <code>[[标题]]</code> 创建双向链接</div>
-          <div>• 支持 Markdown 标准语法</div>
-          <div>• 代码块、表格、引用都可以</div>
-          <div>• 所有内容保存在本地 SQLite</div>
+          <div>• {t("notes.hintWikilinks")}</div>
+          <div>• {t("notes.hintMarkdown")}</div>
+          <div>• {t("notes.hintCodeblocks")}</div>
+          <div>• {t("notes.hintLocalStorage")}</div>
         </div>
       </div>
     </div>
@@ -489,6 +548,7 @@ function NoteCreateModal({
   onClose: () => void;
   onCreated: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const [title, setTitle] = useState("");
 
   async function create() {
@@ -509,7 +569,7 @@ function NoteCreateModal({
     >
       <div className="w-[400px] rounded-2xl border border-[var(--border)] bg-[var(--bg-primary)] shadow-soft-lg animate-fade-in-scale">
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3">
-          <h2 className="text-[14px] font-semibold">新建笔记</h2>
+          <h2 className="text-[14px] font-semibold">{t("notes.newNote")}</h2>
           <button onClick={onClose} className="btn btn-ghost btn-icon">
             <X size={14} />
           </button>
@@ -521,17 +581,17 @@ function NoteCreateModal({
             onKeyDown={(e) => {
               if (e.key === "Enter") create();
             }}
-            placeholder="笔记标题..."
+            placeholder={t("notes.noteTitlePlaceholder")}
             className="input"
             autoFocus
           />
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-[var(--border)] px-5 py-3">
           <button onClick={onClose} className="btn btn-ghost">
-            取消
+            {t("common.cancel")}
           </button>
           <button onClick={create} disabled={!title.trim()} className="btn btn-primary">
-            创建
+            {t("common.create")}
           </button>
         </div>
       </div>

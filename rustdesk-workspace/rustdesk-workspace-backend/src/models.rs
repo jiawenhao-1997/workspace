@@ -8,6 +8,7 @@ pub struct Project {
     pub color: String,
     pub status: String,
     pub progress: i32,
+    pub progress_mode: Option<String>, // "manual" | "auto"
     pub owner: Option<String>,
     pub start_date: Option<String>,
     pub target_date: Option<String>,
@@ -67,7 +68,20 @@ pub struct Event {
     pub end_time: Option<String>,
     pub all_day: bool,
     pub color: String,
+    pub remind_minutes: Option<i32>, // null = 不提醒
     pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeBase {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub icon: Option<String>,
+    pub sort_order: i32,
+    pub item_count: i32, // 冗余字段：库内文件数（含未删除）
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,15 +94,28 @@ pub struct KnowledgeItem {
     pub url: Option<String>,
     pub tags: Option<String>,
     pub summary: Option<String>,
+    pub file_path: Option<String>,
+    pub base_ids: Vec<String>, // 隶属的知识库 ID 列表（多对多）
     pub created_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeChunk {
+    pub id: String,
+    pub item_id: String,
+    pub chunk_index: i32,
+    pub content: String,
+    pub embedding: Option<String>, // Store as JSON array string
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DashboardData {
+    pub overdue_tasks: Vec<Task>,
     pub today_tasks: Vec<Task>,
+    pub unscheduled_tasks: Vec<Task>,
     pub active_projects: Vec<Project>,
     pub recent_activities: Vec<Activity>,
     pub today_progress: i32,
-    pub total_completed: i32,
-    pub total_pending: i32,
+    pub today_done: i32,
+    pub today_pending: i32,
 }

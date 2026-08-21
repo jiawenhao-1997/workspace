@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Search, Plus, Sparkles, ArrowRight } from "lucide-react";
 import { useAppStore } from "../store";
+import { useTranslation } from "react-i18next";
 import { api } from "../api";
 
 interface Command {
@@ -13,6 +14,7 @@ interface Command {
 }
 
 export function CommandPalette() {
+  const { t } = useTranslation();
   const setOpen = useAppStore((s) => s.setCommandPaletteOpen);
   const setView = useAppStore((s) => s.setView);
   const setAiOpen = useAppStore((s) => s.setAiPanelOpen);
@@ -39,9 +41,9 @@ export function CommandPalette() {
   const commands: Command[] = [
     {
       id: "nav-dashboard",
-      label: "前往仪表盘",
+      label: t("nav.goToDashboard"),
       icon: <ArrowRight size={14} />,
-      group: "导航",
+      group: t("nav.navigation"),
       action: () => {
         setView("dashboard");
         setOpen(false);
@@ -49,9 +51,9 @@ export function CommandPalette() {
     },
     {
       id: "nav-projects",
-      label: "前往项目",
+      label: t("nav.goToProjects"),
       icon: <ArrowRight size={14} />,
-      group: "导航",
+      group: t("nav.navigation"),
       action: () => {
         setView("projects");
         setOpen(false);
@@ -59,9 +61,9 @@ export function CommandPalette() {
     },
     {
       id: "nav-tasks",
-      label: "前往任务",
+      label: t("nav.goToTasks"),
       icon: <ArrowRight size={14} />,
-      group: "导航",
+      group: t("nav.navigation"),
       action: () => {
         setView("tasks");
         setOpen(false);
@@ -69,9 +71,9 @@ export function CommandPalette() {
     },
     {
       id: "nav-notes",
-      label: "前往笔记",
+      label: t("nav.goToNotes"),
       icon: <ArrowRight size={14} />,
-      group: "导航",
+      group: t("nav.navigation"),
       action: () => {
         setView("notes");
         setOpen(false);
@@ -79,9 +81,9 @@ export function CommandPalette() {
     },
     {
       id: "nav-knowledge",
-      label: "前往知识库",
+      label: t("nav.goToKnowledge"),
       icon: <ArrowRight size={14} />,
-      group: "导航",
+      group: t("nav.navigation"),
       action: () => {
         setView("knowledge");
         setOpen(false);
@@ -89,9 +91,9 @@ export function CommandPalette() {
     },
     {
       id: "nav-calendar",
-      label: "前往日历",
+      label: t("nav.goToCalendar"),
       icon: <ArrowRight size={14} />,
-      group: "导航",
+      group: t("nav.navigation"),
       action: () => {
         setView("calendar");
         setOpen(false);
@@ -99,9 +101,9 @@ export function CommandPalette() {
     },
     {
       id: "nav-analytics",
-      label: "前往分析",
+      label: t("nav.goToAnalytics"),
       icon: <ArrowRight size={14} />,
-      group: "导航",
+      group: t("nav.navigation"),
       action: () => {
         setView("analytics");
         setOpen(false);
@@ -109,9 +111,9 @@ export function CommandPalette() {
     },
     {
       id: "nav-settings",
-      label: "前往设置",
+      label: t("nav.goToSettings"),
       icon: <ArrowRight size={14} />,
-      group: "导航",
+      group: t("nav.navigation"),
       action: () => {
         setView("settings");
         setOpen(false);
@@ -119,10 +121,10 @@ export function CommandPalette() {
     },
     {
       id: "create-task",
-      label: "新建任务",
-      hint: "跳转到任务页面创建",
+      label: t("nav.newTask"),
+      hint: t("nav.newTaskHint"),
       icon: <Plus size={14} />,
-      group: "创建",
+      group: t("nav.create"),
       action: () => {
         setOpen(false);
         setView("tasks");
@@ -131,10 +133,10 @@ export function CommandPalette() {
     },
     {
       id: "create-note",
-      label: "新建笔记",
-      hint: "跳转到笔记页面创建",
+      label: t("nav.newNote"),
+      hint: t("nav.newNoteHint"),
       icon: <Plus size={14} />,
-      group: "创建",
+      group: t("nav.create"),
       action: () => {
         setOpen(false);
         setView("notes");
@@ -143,7 +145,7 @@ export function CommandPalette() {
     },
     {
       id: "ai-assistant",
-      label: "召唤 AI 助手",
+      label: t("nav.invokeAi"),
       hint: "Ctrl+Shift+Space",
       icon: <Sparkles size={14} className="text-accent-500" />,
       group: "AI",
@@ -154,7 +156,7 @@ export function CommandPalette() {
     },
     {
       id: "ai-summarize",
-      label: "AI: 总结今天工作",
+      label: t("nav.aiSummarize"),
       icon: <Sparkles size={14} className="text-accent-500" />,
       group: "AI",
       action: async () => {
@@ -227,7 +229,7 @@ export function CommandPalette() {
               setActiveIdx(0);
             }}
             onKeyDown={onKeyDown}
-            placeholder="搜索命令、创建任务、记录想法..."
+            placeholder={t("nav.searchPlaceholder")}
             className="flex-1 bg-transparent text-[14px] outline-none placeholder:text-[var(--text-tertiary)]"
           />
           <span className="kbd">ESC</span>
@@ -237,7 +239,7 @@ export function CommandPalette() {
         <div className="max-h-[400px] overflow-y-auto py-2">
           {filtered.length === 0 ? (
             <div className="px-4 py-8 text-center text-[13px] text-[var(--text-tertiary)]">
-              没有匹配的命令
+              {t("nav.noResults")}
             </div>
           ) : (
             Object.entries(grouped).map(([group, cmds]) => (
@@ -285,11 +287,11 @@ export function CommandPalette() {
           <span>
             <span className="kbd mr-1">↑</span>
             <span className="kbd mr-1">↓</span>
-            选择
+            {t("nav.select")}
           </span>
           <span>
             <span className="kbd mr-1">↵</span>
-            执行
+            {t("nav.execute")}
           </span>
         </div>
       </div>

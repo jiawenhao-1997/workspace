@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { Project, Task } from "../types";
+import { useTranslation } from "react-i18next";
 import {
   Plus,
   Folder,
@@ -16,6 +17,7 @@ import {
 import { cn, formatRelativeTime, formatDate, parseTags } from "../utils";
 
 export function Projects() {
+  const { t } = useTranslation();
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -39,7 +41,7 @@ export function Projects() {
   const active = projects.find((p) => p.id === activeId) ?? null;
 
   async function deleteProject(id: string) {
-    if (!confirm("确定删除这个项目吗？关联任务不会被删除。")) return;
+    if (!confirm(t("projects.confirmDelete"))) return;
     try {
       await api.deleteProject(id);
       if (activeId === id) setActiveId(null);
@@ -55,17 +57,17 @@ export function Projects() {
       <div className="w-[320px] flex-shrink-0 border-r border-[var(--border)] bg-[var(--bg-primary)] flex flex-col">
         <div className="border-b border-[var(--border)] px-5 py-4">
           <div className="flex items-center justify-between mb-1">
-            <h1 className="text-[18px] font-semibold">项目</h1>
+            <h1 className="text-[18px] font-semibold">{t("sidebar.projects")}</h1>
             <button
               onClick={() => setShowCreate(true)}
               className="btn btn-primary btn-icon"
-              aria-label="新建"
+              aria-label={t("common.new")}
             >
               <Plus size={14} />
             </button>
           </div>
           <p className="text-[12px] text-[var(--text-tertiary)]">
-            {projects.filter((p) => p.status === "active").length} 个活跃项目
+            {t("projects.activeProjects", { count: projects.filter((p) => p.status === "active").length })}
           </p>
         </div>
 
@@ -73,13 +75,13 @@ export function Projects() {
           {projects.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-[var(--text-tertiary)] px-4 text-center">
               <Folder size={28} className="mb-3 opacity-30" />
-              <div className="text-[13px] mb-3">还没有项目</div>
+              <div className="text-[13px] mb-3">{t("projects.noProjects")}</div>
               <button
                 onClick={() => setShowCreate(true)}
                 className="btn btn-primary"
               >
                 <Plus size={14} />
-                新建项目
+                {t("projects.newProject")}
               </button>
             </div>
           ) : (
@@ -140,13 +142,13 @@ export function Projects() {
         ) : (
           <div className="flex h-full flex-col items-center justify-center text-[var(--text-tertiary)]">
             <Folder size={48} className="mb-4 opacity-20" />
-            <div className="text-[14px] mb-4">选择一个项目查看详情</div>
+            <div className="text-[14px] mb-4">{t("projects.selectToView")}</div>
             <button
               onClick={() => setShowCreate(true)}
               className="btn btn-primary"
             >
               <Plus size={14} />
-              新建项目
+              {t("projects.newProject")}
             </button>
           </div>
         )}
@@ -194,6 +196,15 @@ function ProjectDetail({
     }
   }
 
+  async function setProgressMode(mode: "manual" | "auto") {
+    try {
+      await api.updateProject({ id: project.id, progress_mode: mode });
+      onUpdate();
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
   async function toggleTask(id: string) {
     try {
       await api.toggleTask(id);
@@ -207,6 +218,7 @@ function ProjectDetail({
 
   const completed = tasks.filter((t) => t.status === "done").length;
   const total = tasks.length;
+  const mode = project.progress_mode || "manual"; // 兼容 null 和空字符串
 
   return (
     <div className="mx-auto max-w-[900px] px-8 py-8">
@@ -255,14 +267,51 @@ function ProjectDetail({
           </div>
         </div>
 
-        {/* 进度 */}
+        {/* P1-5: 进度 */}
         <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
               整体进度
             </span>
-            <span className="text-[14px] font-semibold">{project.progress}%</span>
+            <div className="flex items-center gap-2">
+              {mode === "auto" && (
+                <span className="text-[11px] text-[var(--text-tertiary)]">
+                  {completed}/{total} 任务已完成
+                </span>
+              )}
+              <span className="text-[14px] font-semibold">{project.progress}%</span>
+            </div>
           </div>
+
+          {/* P1-5: 进度模式切换 */}
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-[11px] text-[var(--text-tertiary)]">计算方式</span>
+            <div className="flex rounded-lg border border-[var(--border)] overflow-hidden text-[11px]">
+              <button
+                className={cn(
+                  "px-2.5 py-1 transition-colors",
+                  mode === "manual"
+                    ? "bg-accent-500 text-white"
+                    : "bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                )}
+                onClick={() => setProgressMode("manual")}
+              >
+                手动
+              </button>
+              <button
+                className={cn(
+                  "px-2.5 py-1 transition-colors",
+                  mode === "auto"
+                    ? "bg-accent-500 text-white"
+                    : "bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                )}
+                onClick={() => setProgressMode("auto")}
+              >
+                按任务完成率
+              </button>
+            </div>
+          </div>
+
           <div className="progress-bar">
             <div
               className="progress-fill"
@@ -278,9 +327,15 @@ function ProjectDetail({
             max="100"
             value={project.progress}
             onChange={(e) => setProgress(parseInt(e.target.value))}
-            className="w-full mt-3 accent-current"
+            disabled={mode === "auto"}
+            className="w-full mt-3 accent-current disabled:opacity-40"
             style={{ accentColor: project.color }}
           />
+          {mode === "auto" && (
+            <div className="mt-1.5 text-[10.5px] text-[var(--text-tertiary)] text-center">
+              自动计算：勾选任务即可更新进度
+            </div>
+          )}
         </div>
       </div>
 

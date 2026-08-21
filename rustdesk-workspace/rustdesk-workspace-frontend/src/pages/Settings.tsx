@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
+import { save, open, confirm } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
 import { useAppStore, applyTheme } from "../store";
+import { useTranslation } from "react-i18next";
+import { SUPPORTED_LOCALES, type Locale } from "../i18n";
 import type { Theme } from "../types";
 import {
   Settings as SettingsIcon,
@@ -8,7 +11,6 @@ import {
   Moon,
   Monitor,
   Keyboard,
-  Download,
   Upload,
   Database,
   Trash2,
@@ -18,6 +20,8 @@ import {
   User,
   Cloud,
   Edit3,
+  Bell,
+  Globe,
 } from "lucide-react";
 import { cn, adjustColor } from "../utils";
 
@@ -33,14 +37,19 @@ const AVATAR_COLORS = [
 ];
 
 export function Settings() {
+  const { t } = useTranslation();
   const theme = useAppStore((s) => s.theme);
   const setTheme = useAppStore((s) => s.setTheme);
+  const language = useAppStore((s) => s.language);
+  const setLanguage = useAppStore((s) => s.setLanguage);
   const user = useAppStore((s) => s.user);
   const setUser = useAppStore((s) => s.setUser);
   const appName = useAppStore((s) => s.appName);
   const setAppName = useAppStore((s) => s.setAppName);
-  const [exportContent, setExportContent] = useState("");
-  const [exporting, setExporting] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [backupMsg, setBackupMsg] = useState("");
+  const [notifEnabled, setNotifEnabled] = useState(true);
 
   // 用户配置
   const [userName, setUserName] = useState(user.name);
@@ -64,7 +73,24 @@ export function Settings() {
   useEffect(() => {
     // 加载云同步设置
     loadSyncSettings();
+    // 加载提醒通知设置
+    api
+      .getSetting("notifications_enabled")
+      .then((v) => {
+        if (v !== null) setNotifEnabled(v !== "false");
+      })
+      .catch((e) => console.error(e));
   }, []);
+
+  async function toggleNotifications(enabled: boolean) {
+    setNotifEnabled(enabled);
+    try {
+      await api.setSetting("notifications_enabled", enabled ? "true" : "false");
+    } catch (e) {
+      console.error(e);
+      setNotifEnabled(!enabled);
+    }
+  }
 
   async function loadSyncSettings() {
     try {
@@ -98,22 +124,54 @@ export function Settings() {
     }
   }
 
-  async function exportData() {
-    setExporting(true);
+  async function handleBackup() {
+    setBackupMsg("");
+    const path = await save({
+      title: t("settings.selectBackupLocation"),
+      defaultPath: `rustdesk-workspace-backup-${new Date()
+        .toISOString()
+        .slice(0, 19)
+        .replace(/[T:]/g, "-")}.json`,
+      filters: [{ name: t("settings.backupFile"), extensions: ["json"] }],
+    });
+    if (!path) return;
+
+    setBackingUp(true);
     try {
-      const content = await api.exportData();
-      setExportContent(content);
-      const blob = new Blob([content], { type: "text/markdown" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${appName.toLowerCase().replace(/\s+/g, "-")}-export-${Date.now()}.md`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error(e);
+      const msg = await api.exportBackup(path);
+      setBackupMsg(msg);
+    } catch (e: any) {
+      setBackupMsg(t("settings.backupFailed", { error: e?.message ?? String(e) }));
     } finally {
-      setExporting(false);
+      setBackingUp(false);
+    }
+  }
+
+  async function handleRestore() {
+    setBackupMsg("");
+    const path = await open({
+      title: t("settings.restoreFromBackup"),
+      multiple: false,
+      directory: false,
+      filters: [{ name: t("settings.backupFile"), extensions: ["json"] }],
+    });
+    if (!path || typeof path !== "string") return;
+
+    const ok = await confirm(
+      t("settings.restoreWarning"),
+      { title: t("settings.restoreTitle"), kind: "warning", okLabel: t("settings.overwriteRestore"), cancelLabel: t("common.cancel") }
+    );
+    if (!ok) return;
+
+    setRestoring(true);
+    try {
+      const msg = await api.importBackup(path);
+      setBackupMsg(t("settings.restoreSuccess"));
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (e: any) {
+      setBackupMsg(t("settings.restoreFailed", { error: e?.message ?? String(e) }));
+    } finally {
+      setRestoring(false);
     }
   }
 
@@ -121,9 +179,9 @@ export function Settings() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-[800px] px-8 py-8">
         <div className="mb-8">
-          <h1 className="h-display">设置</h1>
+          <h1 className="h-display">{t("settings.title")}</h1>
           <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
-            个性化你的工作台
+            {t("settings.subtitle")}
           </p>
         </div>
 
@@ -134,9 +192,9 @@ export function Settings() {
               <User size={14} />
             </div>
             <div>
-              <h2 className="text-[14px] font-semibold">用户信息</h2>
+              <h2 className="text-[14px] font-semibold">{t("settings.userInfo")}</h2>
               <p className="text-[11px] text-[var(--text-tertiary)]">
-                设置你的昵称、状态和头像颜色
+                {t("settings.userInfoDesc")}
               </p>
             </div>
           </div>
@@ -161,13 +219,13 @@ export function Settings() {
                 className="btn btn-secondary"
               >
                 <Edit3 size={14} />
-                编辑
+                {t("settings.edit")}
               </button>
             </div>
           ) : (
             <div className="space-y-3 p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border)]">
               <div>
-                <label className="text-[11px] text-[var(--text-tertiary)] mb-1 block">头像颜色</label>
+                <label className="text-[11px] text-[var(--text-tertiary)] mb-1 block">{t("settings.avatarColor")}</label>
                 <div className="flex gap-2">
                   {AVATAR_COLORS.map((color) => (
                     <button
@@ -183,29 +241,29 @@ export function Settings() {
                 </div>
               </div>
               <div>
-                <label className="text-[11px] text-[var(--text-tertiary)] mb-1 block">昵称</label>
+                <label className="text-[11px] text-[var(--text-tertiary)] mb-1 block">{t("settings.nickname")}</label>
                 <input
                   value={userName}
                   onChange={(e) => setUserName(e.target.value)}
                   className="input"
-                  placeholder="输入你的昵称"
+                  placeholder={t("settings.nicknamePlaceholder")}
                 />
               </div>
               <div>
-                <label className="text-[11px] text-[var(--text-tertiary)] mb-1 block">状态</label>
+                <label className="text-[11px] text-[var(--text-tertiary)] mb-1 block">{t("settings.status")}</label>
                 <input
                   value={userStatus}
                   onChange={(e) => setUserStatus(e.target.value)}
                   className="input"
-                  placeholder="例如：专注中、忙碌中"
+                  placeholder={t("settings.statusPlaceholder")}
                 />
               </div>
               <div className="flex justify-end gap-2">
                 <button onClick={() => setEditingUser(false)} className="btn btn-ghost">
-                  取消
+                  {t("common.cancel")}
                 </button>
                 <button onClick={saveUserProfile} className="btn btn-primary">
-                  保存
+                  {t("common.save")}
                 </button>
               </div>
             </div>
@@ -219,9 +277,9 @@ export function Settings() {
               <Cloud size={14} />
             </div>
             <div>
-              <h2 className="text-[14px] font-semibold">应用名称</h2>
+              <h2 className="text-[14px] font-semibold">{t("settings.appName")}</h2>
               <p className="text-[11px] text-[var(--text-tertiary)]">
-                自定义显示名称
+                {t("settings.appNameDesc")}
               </p>
             </div>
           </div>
@@ -242,41 +300,115 @@ export function Settings() {
               <SettingsIcon size={14} />
             </div>
             <div>
-              <h2 className="text-[14px] font-semibold">外观</h2>
+              <h2 className="text-[14px] font-semibold">{t("settings.appearance")}</h2>
               <p className="text-[11px] text-[var(--text-tertiary)]">
-                主题、字体与界面偏好
+                {t("settings.appearanceDesc")}
               </p>
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3">
             {[
-              { id: "light", label: "浅色", icon: <Sun size={16} /> },
-              { id: "dark", label: "深色", icon: <Moon size={16} /> },
-              { id: "system", label: "跟随系统", icon: <Monitor size={16} /> },
-            ].map((t) => (
+              { id: "light", label: t("settings.light"), icon: <Sun size={16} /> },
+              { id: "dark", label: t("settings.dark"), icon: <Moon size={16} /> },
+              { id: "system", label: t("settings.system"), icon: <Monitor size={16} /> },
+            ].map((t_theme) => (
               <button
-                key={t.id}
-                onClick={() => setTheme(t.id as Theme)}
+                key={t_theme.id}
+                onClick={() => setTheme(t_theme.id as Theme)}
                 className={cn(
                   "flex items-center justify-center gap-2 rounded-xl border p-4 transition-all",
-                  theme === t.id
+                  theme === t_theme.id
                     ? "border-accent-500 bg-accent-50/30"
                     : "border-[var(--border)] hover:border-[var(--border-strong)]"
                 )}
               >
                 <span
                   className={cn(
-                    theme === t.id ? "text-accent-500" : "text-[var(--text-secondary)]"
+                    theme === t_theme.id ? "text-accent-500" : "text-[var(--text-secondary)]"
                   )}
                 >
-                  {t.icon}
+                  {t_theme.icon}
                 </span>
-                <span className="text-[13px] font-medium">{t.label}</span>
-                {theme === t.id && (
+                <span className="text-[13px] font-medium">{t_theme.label}</span>
+                {theme === t_theme.id && (
                   <Check size={14} className="text-accent-500 ml-auto" />
                 )}
               </button>
             ))}
+          </div>
+        </section>
+
+        {/* 语言 */}
+        <section className="card p-5 mb-4">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-8 w-8 rounded-lg bg-accent-50 flex items-center justify-center text-accent-500">
+              <Globe size={14} />
+            </div>
+            <div>
+              <h2 className="text-[14px] font-semibold">{t("settings.language")}</h2>
+              <p className="text-[11px] text-[var(--text-tertiary)]">
+                {t("settings.languageDesc")}
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {SUPPORTED_LOCALES.map((locale) => (
+              <button
+                key={locale}
+                onClick={() => setLanguage(locale)}
+                className={cn(
+                  "flex items-center justify-center gap-2 rounded-xl border p-4 transition-all",
+                  language === locale
+                    ? "border-accent-500 bg-accent-50/30"
+                    : "border-[var(--border)] hover:border-[var(--border-strong)]"
+                )}
+              >
+                <span className="text-[14px] font-medium">
+                  {locale === "zh-CN" ? "中文" : "English"}
+                </span>
+                {language === locale && (
+                  <Check size={14} className="text-accent-500" />
+                )}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* 提醒 */}
+        <section className="card p-5 mb-4">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-8 w-8 rounded-lg bg-accent-50 flex items-center justify-center text-accent-500">
+              <Bell size={14} />
+            </div>
+            <div>
+              <h2 className="text-[14px] font-semibold">{t("settings.notifications")}</h2>
+              <p className="text-[11px] text-[var(--text-tertiary)]">
+                {t("settings.notificationsDesc")}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center justify-between p-3 rounded-lg border border-[var(--border)]">
+            <div>
+              <div className="text-[13px] font-medium">{t("settings.dueReminders")}</div>
+              <div className="text-[11px] text-[var(--text-tertiary)]">
+                {t("settings.dueRemindersDesc")}
+              </div>
+            </div>
+            <button
+              onClick={() => toggleNotifications(!notifEnabled)}
+              className={cn(
+                "relative h-6 w-11 rounded-full transition-colors",
+                notifEnabled ? "bg-accent-500" : "bg-[var(--border-strong)]"
+              )}
+              aria-label={t("settings.notifications")}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all",
+                  notifEnabled ? "left-[22px]" : "left-0.5"
+                )}
+              />
+            </button>
           </div>
         </section>
 
@@ -287,23 +419,23 @@ export function Settings() {
               <Keyboard size={14} />
             </div>
             <div>
-              <h2 className="text-[14px] font-semibold">键盘快捷键</h2>
+              <h2 className="text-[14px] font-semibold">{t("settings.keyboardShortcuts")}</h2>
               <p className="text-[11px] text-[var(--text-tertiary)]">
-                提高你的操作效率
+                {t("settings.keyboardShortcutsDesc")}
               </p>
             </div>
           </div>
           <div className="space-y-2">
             {[
-              { keys: ["⌘", "K"], desc: "打开命令面板" },
-              { keys: ["⌘", "Space"], desc: "命令面板（备用）" },
-              { keys: ["⌘", "Shift", "Space"], desc: "AI 助手" },
-              { keys: ["⌘", "N"], desc: "快速新建" },
-              { keys: ["⌘", "1"], desc: "仪表盘" },
-              { keys: ["⌘", "2"], desc: "项目" },
-              { keys: ["⌘", "3"], desc: "任务" },
-              { keys: ["⌘", "4"], desc: "笔记" },
-              { keys: ["Esc"], desc: "关闭面板" },
+              { keys: ["⌘", "K"], desc: t("settings.shortcuts.openCommandPalette") },
+              { keys: ["⌘", "Space"], desc: t("settings.shortcuts.commandPaletteAlt") },
+              { keys: ["⌘", "Shift", "Space"], desc: t("settings.shortcuts.aiAssistant") },
+              { keys: ["⌘", "N"], desc: t("settings.shortcuts.quickNew") },
+              { keys: ["⌘", "1"], desc: t("settings.shortcuts.dashboard") },
+              { keys: ["⌘", "2"], desc: t("settings.shortcuts.projects") },
+              { keys: ["⌘", "3"], desc: t("settings.shortcuts.tasks") },
+              { keys: ["⌘", "4"], desc: t("settings.shortcuts.notes") },
+              { keys: ["Esc"], desc: t("settings.shortcuts.closePanel") },
             ].map((s, i) => (
               <div
                 key={i}
@@ -329,15 +461,15 @@ export function Settings() {
               <Cloud size={14} />
             </div>
             <div>
-              <h2 className="text-[14px] font-semibold">应用名称与同步</h2>
+              <h2 className="text-[14px] font-semibold">{t("settings.cloudSync")}</h2>
               <p className="text-[11px] text-[var(--text-tertiary)]">
-                自定义应用名称和云同步设置
+                {t("settings.cloudSyncDesc")}
               </p>
             </div>
           </div>
           <div className="space-y-3">
             <div>
-              <label className="text-[11px] text-[var(--text-tertiary)] mb-1 block">应用名称</label>
+              <label className="text-[11px] text-[var(--text-tertiary)] mb-1 block">{t("settings.appName")}</label>
               <input
                 value={appName}
                 onChange={(e) => setAppName(e.target.value)}
@@ -347,9 +479,9 @@ export function Settings() {
             </div>
             <div className="flex items-center justify-between p-3 rounded-lg border border-[var(--border)]">
               <div>
-                <div className="text-[13px] font-medium">启用云同步</div>
+                <div className="text-[13px] font-medium">{t("settings.enableCloudSync")}</div>
                 <div className="text-[11px] text-[var(--text-tertiary)]">
-                  将数据同步到云端（支持 WebDAV / Git / S3）
+                  {t("settings.enableCloudSyncDesc")}
                 </div>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -365,20 +497,20 @@ export function Settings() {
             {syncEnabled && (
               <div className="space-y-3 p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border)]">
                 <div>
-                  <label className="text-[11px] text-[var(--text-tertiary)] mb-1 block">同步方式</label>
+                  <label className="text-[11px] text-[var(--text-tertiary)] mb-1 block">{t("settings.syncMethod")}</label>
                   <select
                     value={syncProvider}
                     onChange={(e) => setSyncProvider(e.target.value)}
                     className="input"
                   >
-                    <option value="local">本地模式（不启用）</option>
-                    <option value="webdav">WebDAV</option>
-                    <option value="git">Git</option>
-                    <option value="s3">S3 / 对象存储</option>
+                    <option value="local">{t("settings.syncMethodLocal")}</option>
+                    <option value="webdav">{t("settings.syncMethodWebdav")}</option>
+                    <option value="git">{t("settings.syncMethodGit")}</option>
+                    <option value="s3">{t("settings.syncMethodS3")}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] text-[var(--text-tertiary)] mb-1 block">服务器地址</label>
+                  <label className="text-[11px] text-[var(--text-tertiary)] mb-1 block">{t("settings.serverAddress")}</label>
                   <input
                     value={syncEndpoint}
                     onChange={(e) => setSyncEndpoint(e.target.value)}
@@ -403,7 +535,7 @@ export function Settings() {
                 className="btn btn-primary"
               >
                 {syncLoading ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-                保存同步设置
+                {t("settings.saveSyncSettings")}
               </button>
             </div>
           </div>
@@ -416,9 +548,9 @@ export function Settings() {
               <Database size={14} />
             </div>
             <div>
-              <h2 className="text-[14px] font-semibold">数据</h2>
+              <h2 className="text-[14px] font-semibold">{t("settings.data")}</h2>
               <p className="text-[11px] text-[var(--text-tertiary)]">
-                备份与导入
+                {t("settings.dataDesc")}
               </p>
             </div>
           </div>
@@ -426,65 +558,89 @@ export function Settings() {
           <div className="space-y-3">
             <div className="flex items-center justify-between p-3 rounded-lg border border-[var(--border)]">
               <div>
-                <div className="text-[13px] font-medium">导出数据</div>
+                <div className="text-[13px] font-medium">{t("settings.fullBackup")}</div>
                 <div className="text-[11px] text-[var(--text-tertiary)]">
-                  导出所有项目、任务、笔记为 Markdown
+                  {t("settings.fullBackupDesc")}
                 </div>
               </div>
               <button
-                onClick={exportData}
-                disabled={exporting}
+                onClick={handleBackup}
+                disabled={backingUp}
                 className="btn btn-secondary"
               >
-                {exporting ? (
+                {backingUp ? (
                   <RefreshCw size={14} className="animate-spin" />
                 ) : (
-                  <Download size={14} />
+                  <Upload size={14} />
                 )}
-                导出
+                {t("settings.backup")}
               </button>
             </div>
 
             <div className="flex items-center justify-between p-3 rounded-lg border border-[var(--border)]">
               <div>
-                <div className="text-[13px] font-medium">本地模式</div>
+                <div className="text-[13px] font-medium">{t("settings.restoreFromBackup")}</div>
                 <div className="text-[11px] text-[var(--text-tertiary)]">
-                  所有数据存储在本地 SQLite 数据库
+                  {t("settings.restoreFromBackupDesc")}
                 </div>
               </div>
-              <span className="pill bg-green-50 text-success">已启用</span>
+              <button
+                onClick={handleRestore}
+                disabled={restoring}
+                className="btn btn-secondary"
+              >
+                {restoring ? (
+                  <RefreshCw size={14} className="animate-spin" />
+                ) : (
+                  <Upload size={14} />
+                )}
+                {t("settings.restore")}
+              </button>
+            </div>
+
+            {backupMsg && (
+              <div className="p-3 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] text-[12px] text-[var(--text-secondary)]">
+                {backupMsg}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between p-3 rounded-lg border border-[var(--border)]">
+              <div>
+                <div className="text-[13px] font-medium">{t("settings.localMode")}</div>
+                <div className="text-[11px] text-[var(--text-tertiary)]">
+                  {t("settings.localModeDesc")}
+                </div>
+              </div>
+              <span className="pill bg-green-50 text-success">{t("settings.enabled")}</span>
             </div>
           </div>
         </section>
 
         {/* 关于 */}
         <section className="card p-5">
-          <h2 className="text-[14px] font-semibold mb-3">关于</h2>
+          <h2 className="text-[14px] font-semibold mb-3">{t("settings.about")}</h2>
           <div className="space-y-2 text-[12px] text-[var(--text-secondary)]">
             <div className="flex justify-between">
-              <span>版本</span>
+              <span>{t("settings.version")}</span>
               <span className="font-mono">0.1.0</span>
             </div>
             <div className="flex justify-between">
-              <span>技术栈</span>
+              <span>{t("settings.techStack")}</span>
               <span className="font-mono">Rust + Tauri 2.0 + React</span>
             </div>
             <div className="flex justify-between">
-              <span>数据库</span>
-              <span className="font-mono">SQLite (本地)</span>
+              <span>{t("settings.database")}</span>
+              <span className="font-mono">{t("settings.databaseValue")}</span>
             </div>
             <div className="flex justify-between">
-              <span>存储位置</span>
+              <span>{t("settings.storageLocation")}</span>
               <span className="font-mono text-[11px]">
                 ~/Library/Application Support/RustDeskWorkspace
               </span>
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-[var(--border)] text-[11px] text-[var(--text-tertiary)] leading-relaxed">
-            {appName} 是一个本地优先的个人生产力工具，融合了
-            Notion、Obsidian、Raycast 和 Linear 的设计理念。
-            <br />
-            你的数据属于你。
+            {t("settings.aboutDescription", { appName })}
           </div>
         </section>
       </div>

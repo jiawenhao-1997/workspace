@@ -1,4 +1,7 @@
+import i18n from "./i18n";
+
 export function formatRelativeTime(dateStr: string): string {
+  const locale = i18n.language || "zh-CN";
   const date = new Date(dateStr);
   const now = new Date();
   const diff = now.getTime() - date.getTime();
@@ -7,27 +10,35 @@ export function formatRelativeTime(dateStr: string): string {
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
 
-  if (seconds < 60) return "刚刚";
-  if (minutes < 60) return `${minutes} 分钟前`;
-  if (hours < 24) return `${hours} 小时前`;
-  if (days < 7) return `${days} 天前`;
-  return date.toLocaleDateString("zh-CN", {
+  if (seconds < 60) return locale === "en-US" ? "just now" : "刚刚";
+  if (minutes < 60) return locale === "en-US"
+    ? `${minutes} minute${minutes > 1 ? "s" : ""} ago`
+    : `${minutes} 分钟前`;
+  if (hours < 24) return locale === "en-US"
+    ? `${hours} hour${hours > 1 ? "s" : ""} ago`
+    : `${hours} 小时前`;
+  if (days < 7) return locale === "en-US"
+    ? `${days} day${days > 1 ? "s" : ""} ago`
+    : `${days} 天前`;
+  return date.toLocaleDateString(locale, {
     month: "short",
     day: "numeric",
   });
 }
 
 export function formatTime(dateStr: string): string {
+  const locale = i18n.language || "zh-CN";
   const date = new Date(dateStr);
-  return date.toLocaleTimeString("zh-CN", {
+  return date.toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
 export function formatDate(dateStr: string): string {
+  const locale = i18n.language || "zh-CN";
   const date = new Date(dateStr);
-  return date.toLocaleDateString("zh-CN", {
+  return date.toLocaleDateString(locale, {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -35,8 +46,9 @@ export function formatDate(dateStr: string): string {
 }
 
 export function formatDateShort(dateStr: string): string {
+  const locale = i18n.language || "zh-CN";
   const date = new Date(dateStr);
-  return date.toLocaleDateString("zh-CN", {
+  return date.toLocaleDateString(locale, {
     month: "short",
     day: "numeric",
   });
@@ -60,7 +72,15 @@ export function isOverdue(dateStr: string): boolean {
 }
 
 export function getGreeting(): string {
+  const locale = i18n.language || "zh-CN";
   const hour = new Date().getHours();
+  if (locale === "en-US") {
+    if (hour < 6) return "Good night";
+    if (hour < 11) return "Good morning";
+    if (hour < 13) return "Good noon";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  }
   if (hour < 6) return "夜深了";
   if (hour < 11) return "早上好";
   if (hour < 13) return "中午好";
@@ -69,11 +89,13 @@ export function getGreeting(): string {
 }
 
 export function getWeekDay(): string {
-  return new Date().toLocaleDateString("zh-CN", { weekday: "long" });
+  const locale = i18n.language || "zh-CN";
+  return new Date().toLocaleDateString(locale, { weekday: "long" });
 }
 
 export function getFullDate(): string {
-  return new Date().toLocaleDateString("zh-CN", {
+  const locale = i18n.language || "zh-CN";
+  return new Date().toLocaleDateString(locale, {
     year: "numeric",
     month: "long",
     day: "numeric",

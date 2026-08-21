@@ -1,4 +1,5 @@
 import { useAppStore } from "../store";
+import { useTranslation } from "react-i18next";
 import {
   Home,
   Folder,
@@ -10,30 +11,13 @@ import {
   Settings,
   Plus,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { cn, getGreeting, adjustColor } from "../utils";
 import type { View } from "../types";
 
-interface NavItem {
-  id: View;
-  label: string;
-  icon: React.ReactNode;
-  shortcut: string;
-}
-
-const NAV_ITEMS: NavItem[] = [
-  { id: "dashboard", label: "仪表盘", icon: <Home size={16} />, shortcut: "1" },
-  { id: "projects", label: "项目", icon: <Folder size={16} />, shortcut: "2" },
-  { id: "tasks", label: "任务", icon: <CheckSquare size={16} />, shortcut: "3" },
-  { id: "notes", label: "笔记", icon: <FileText size={16} />, shortcut: "4" },
-  { id: "knowledge", label: "知识库", icon: <BookOpen size={16} />, shortcut: "5" },
-  { id: "calendar", label: "日历", icon: <Calendar size={16} />, shortcut: "6" },
-  { id: "analytics", label: "分析", icon: <BarChart3 size={16} />, shortcut: "7" },
-  { id: "ai", label: "AI", icon: <Sparkles size={16} />, shortcut: "" },
-  { id: "settings", label: "设置", icon: <Settings size={16} />, shortcut: "8" },
-];
-
 export function Sidebar() {
+  const { t } = useTranslation();
   const currentView = useAppStore((s) => s.currentView);
   const setView = useAppStore((s) => s.setView);
   const setCommandPaletteOpen = useAppStore((s) => s.setCommandPaletteOpen);
@@ -41,6 +25,19 @@ export function Sidebar() {
   const user = useAppStore((s) => s.user);
 
   const greeting = getGreeting();
+
+  const navItems = [
+    { id: "dashboard" as View, label: t("sidebar.dashboard"), icon: <Home size={16} />, shortcut: "1" },
+    { id: "projects" as View, label: t("sidebar.projects"), icon: <Folder size={16} />, shortcut: "2" },
+    { id: "tasks" as View, label: t("sidebar.tasks"), icon: <CheckSquare size={16} />, shortcut: "3" },
+    { id: "notes" as View, label: t("sidebar.notes"), icon: <FileText size={16} />, shortcut: "4" },
+    { id: "knowledge" as View, label: t("sidebar.knowledge"), icon: <BookOpen size={16} />, shortcut: "5" },
+    { id: "calendar" as View, label: t("sidebar.calendar"), icon: <Calendar size={16} />, shortcut: "6" },
+    { id: "analytics" as View, label: t("sidebar.analytics"), icon: <BarChart3 size={16} />, shortcut: "7" },
+    { id: "ai" as View, label: "AI", icon: <Sparkles size={16} />, shortcut: "" },
+    { id: "settings" as View, label: t("sidebar.settings"), icon: <Settings size={16} />, shortcut: "8" },
+    { id: "trash" as View, label: t("sidebar.trash"), icon: <Trash2 size={16} />, shortcut: "" },
+  ];
 
   return (
     <aside className="flex h-full w-[260px] flex-shrink-0 flex-col border-r border-[var(--border)] bg-[var(--bg-primary)]">
@@ -72,10 +69,10 @@ export function Sidebar() {
       {/* 工作区导航 */}
       <div className="flex-1 overflow-y-auto px-3 py-2 scrollbar-none">
         <div className="px-2 pt-1 pb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-          工作区
+          {t("sidebar.workspace")}
         </div>
         <nav className="space-y-1">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <button
               key={item.id}
               onClick={() => setView(item.id)}
@@ -102,7 +99,7 @@ export function Sidebar() {
           <div className="h-1.5 w-1.5 rounded-full bg-success animate-pulse"></div>
           <span className="text-[11px] text-[var(--text-secondary)]">{greeting}</span>
           <span className="text-[11px] text-[var(--text-tertiary)]">·</span>
-          <span className="text-[11px] text-[var(--text-tertiary)]">本地模式</span>
+          <span className="text-[11px] text-[var(--text-tertiary)]">{t("sidebar.localMode")}</span>
         </div>
       </div>
     </aside>

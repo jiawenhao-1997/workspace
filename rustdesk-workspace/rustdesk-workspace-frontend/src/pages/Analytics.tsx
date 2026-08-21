@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { api } from "../api";
 import type { DashboardData, Task, Project, Activity as ActivityType } from "../types";
 import {
@@ -12,6 +13,7 @@ import {
 import { formatRelativeTime } from "../utils";
 
 export function Analytics() {
+  const { t } = useTranslation();
   const [data, setData] = useState<DashboardData | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activities, setActivities] = useState<ActivityType[]>([]);
@@ -30,8 +32,8 @@ export function Analytics() {
 
   const stats = data
     ? {
-        completed: data.total_completed,
-        pending: data.total_pending,
+        completed: data.today_done,
+        pending: data.today_pending,
         progress: data.today_progress,
         projects: data.active_projects.length,
       }
@@ -66,34 +68,34 @@ export function Analytics() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-[1200px] px-8 py-8">
         <div className="mb-8">
-          <h1 className="h-display">分析</h1>
+          <h1 className="h-display">{t("analytics.title")}</h1>
           <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
-            工作效率与生产力的全局视图
+            {t("analytics.subtitle")}
           </p>
         </div>
 
         {/* 关键指标 */}
         <div className="grid grid-cols-4 gap-4 mb-8">
           <StatCard
-            label="今日完成"
+            label={t("analytics.todayCompleted")}
             value={stats.completed}
             icon={<CheckCircle2 size={16} />}
             color="#22C55E"
           />
           <StatCard
-            label="待处理"
+            label={t("analytics.pending")}
             value={stats.pending}
             icon={<Circle size={16} />}
             color="#F59E0B"
           />
           <StatCard
-            label="完成率"
+            label={t("analytics.completionRate")}
             value={`${completionRate}%`}
             icon={<TrendingUp size={16} />}
             color="#3B82F6"
           />
           <StatCard
-            label="活跃项目"
+            label={t("analytics.activeProjects")}
             value={stats.projects}
             icon={<Target size={16} />}
             color="#8B5CF6"
@@ -103,13 +105,13 @@ export function Analytics() {
         <div className="grid grid-cols-3 gap-6">
           {/* 优先级分布 */}
           <div className="card p-5">
-            <h3 className="h-section mb-4">优先级分布</h3>
+            <h3 className="h-section mb-4">{t("analytics.priorityDistribution")}</h3>
             <div className="space-y-3">
               {[
-                { id: "urgent", label: "紧急", color: "#EF4444" },
-                { id: "high", label: "高", color: "#F59E0B" },
-                { id: "medium", label: "中", color: "#3B82F6" },
-                { id: "low", label: "低", color: "#94A3B8" },
+                { id: "urgent", label: t("common.urgent"), color: "#EF4444" },
+                { id: "high", label: t("common.high"), color: "#F59E0B" },
+                { id: "medium", label: t("common.medium"), color: "#3B82F6" },
+                { id: "low", label: t("common.low"), color: "#94A3B8" },
               ].map((p) => {
                 const count = byPriority[p.id] ?? 0;
                 const max = Math.max(...Object.values(byPriority), 1);
@@ -136,12 +138,12 @@ export function Analytics() {
 
           {/* 状态分布 */}
           <div className="card p-5">
-            <h3 className="h-section mb-4">状态分布</h3>
+            <h3 className="h-section mb-4">{t("analytics.statusDistribution")}</h3>
             <div className="space-y-3">
               {[
-                { id: "todo", label: "待办", color: "#94A3B8" },
-                { id: "in_progress", label: "进行中", color: "#3B82F6" },
-                { id: "done", label: "已完成", color: "#22C55E" },
+                { id: "todo", label: t("common.todo"), color: "#94A3B8" },
+                { id: "in_progress", label: t("common.inProgress"), color: "#3B82F6" },
+                { id: "done", label: t("common.doneStatus"), color: "#22C55E" },
               ].map((s) => {
                 const count = byStatus[s.id] ?? 0;
                 const max = Math.max(...Object.values(byStatus), 1);
@@ -169,7 +171,7 @@ export function Analytics() {
             <div className="mt-6 flex flex-col items-center">
               <ProgressRing value={completionRate} />
               <div className="mt-2 text-[12px] text-[var(--text-secondary)]">
-                整体完成率
+                {t("analytics.overallCompletionRate")}
               </div>
             </div>
           </div>
@@ -178,7 +180,7 @@ export function Analytics() {
           <div className="card p-5">
             <h3 className="h-section mb-4 flex items-center gap-2">
               <ActivityIcon size={14} />
-              最近活动
+              {t("analytics.recentActivity")}
             </h3>
             <div className="space-y-2 max-h-[300px] overflow-y-auto">
               {activities.slice(0, 12).map((a) => (
@@ -201,7 +203,7 @@ export function Analytics() {
         {/* 项目分布 */}
         {data && data.active_projects.length > 0 && (
           <div className="card p-5 mt-6">
-            <h3 className="h-section mb-4">项目任务分布</h3>
+            <h3 className="h-section mb-4">{t("analytics.projectTaskDistribution")}</h3>
             <div className="space-y-3">
               {data.active_projects.map((p) => {
                 const count = byProject[p.id] ?? 0;

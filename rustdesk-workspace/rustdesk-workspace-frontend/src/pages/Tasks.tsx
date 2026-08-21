@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import type { Task, Project } from "../types";
 import { useAppStore } from "../store";
+import { useTranslation } from "react-i18next";
 import {
   Plus,
   List,
@@ -19,13 +20,41 @@ import {
 } from "lucide-react";
 import { cn, formatRelativeTime, isOverdue, isToday, parseTags } from "../utils";
 
+function toDateInput(d: Date): string {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function quickDateOptions(t: any): { label: string; value: string }[] {
+  const now = new Date();
+  const today = new Date(now);
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  const sunday = new Date(now);
+  const dayOfWeek = sunday.getDay();
+  const offset = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+  sunday.setDate(now.getDate() + offset);
+  const nextMonday = new Date(now);
+  nextMonday.setDate(now.getDate() + ((dayOfWeek === 0 ? 1 : 8) - dayOfWeek));
+  return [
+    { label: t("common.today"), value: toDateInput(today) },
+    { label: t("common.tomorrow"), value: toDateInput(tomorrow) },
+    { label: t("tasks.thisSunday"), value: toDateInput(sunday) },
+    { label: t("tasks.nextMonday"), value: toDateInput(nextMonday) },
+  ];
+}
+
 type ViewMode = "list" | "kanban" | "calendar";
 
-const COLUMNS = [
-  { id: "todo", label: "待办", color: "#94A3B8" },
-  { id: "in_progress", label: "进行中", color: "#3B82F6" },
-  { id: "done", label: "已完成", color: "#22C55E" },
-];
+function getColumns(t: any) {
+  return [
+    { id: "todo", label: t("common.todo"), color: "#94A3B8" },
+    { id: "in_progress", label: t("common.inProgress"), color: "#3B82F6" },
+    { id: "done", label: t("common.doneStatus"), color: "#22C55E" },
+  ];
+}
 
 const priorityColors: Record<string, string> = {
   urgent: "text-danger bg-red-50",
@@ -34,14 +63,8 @@ const priorityColors: Record<string, string> = {
   low: "text-[var(--text-tertiary)] bg-gray-100",
 };
 
-const priorityLabel: Record<string, string> = {
-  urgent: "紧急",
-  high: "高优",
-  medium: "中优",
-  low: "低优",
-};
-
 export function Tasks() {
+  const { t } = useTranslation();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [view, setView] = useState<ViewMode>("list");
@@ -50,6 +73,9 @@ export function Tasks() {
   const [filterProject, setFilterProject] = useState<string>("all");
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
+
+  const columns = getColumns(t);
+  const dateOptions = quickDateOptions(t);
 
   // 监听新建任务弹窗
   const newTaskModalOpen = useAppStore((s) => s.newTaskModalOpen);
@@ -64,8 +90,8 @@ export function Tasks() {
 
   async function load() {
     try {
-      const [t, p] = await Promise.all([api.listTasks(), api.listProjects()]);
-      setTasks(t);
+      const [t_data, p] = await Promise.all([api.listTasks(), api.listProjects()]);
+      setTasks(t_data);
       setProjects(p);
     } catch (e) {
       console.error(e);
@@ -77,12 +103,12 @@ export function Tasks() {
   }, []);
 
   const filtered = useMemo(() => {
-    return tasks.filter((t) => {
-      if (filterStatus !== "all" && t.status !== filterStatus) return false;
-      if (filterProject !== "all" && t.project_id !== filterProject) return false;
+    return tasks.filter((task) => {
+      if (filterStatus !== "all" && task.status !== filterStatus) return false;
+      if (filterProject !== "all" && task.project_id !== filterProject) return false;
       if (search) {
         const q = search.toLowerCase();
-        if (!t.title.toLowerCase().includes(q)) return false;
+        if (!task.title.toLowerCase().includes(q)) return false;
       }
       return true;
     });
@@ -107,6 +133,7 @@ export function Tasks() {
   }
 
   async function deleteTask(id: string) {
+    if (!confirm(t("common.confirmDelete"))) return;
     try {
       await api.deleteTask(id);
       await load();
@@ -121,18 +148,18 @@ export function Tasks() {
       <div className="border-b border-[var(--border)] bg-[var(--bg-primary)] px-8 py-5">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="h-display">任务</h1>
+            <h1 className="h-display">{t("sidebar.tasks")}</h1>
             <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
-              {tasks.filter((t) => t.status !== "done").length} 进行中 ·{" "}
-              {tasks.filter((t) => t.status === "done").length} 已完成
+              {tasks.filter((task) => task.status !== "done").length} {t("common.inProgress")} ·{" "}
+              {tasks.filter((task) => task.status === "done").length} {t("common.doneStatus")}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex rounded-lg border border-[var(--border)] p-0.5">
               {[
-                { id: "list", icon: <List size={14} />, label: "列表" },
-                { id: "kanban", icon: <KanbanSquare size={14} />, label: "看板" },
-                { id: "calendar", icon: <CalIcon size={14} />, label: "日历" },
+                { id: "list", icon: <List size={14} />, label: t("tasks.listView") },
+                { id: "kanban", icon: <KanbanSquare size={14} />, label: t("tasks.kanbanView") },
+                { id: "calendar", icon: <CalIcon size={14} />, label: t("tasks.calendarView") },
               ].map((v) => (
                 <button
                   key={v.id}
@@ -154,7 +181,7 @@ export function Tasks() {
               className="btn btn-primary"
             >
               <Plus size={14} />
-              新建任务
+              {t("tasks.newTask")}
             </button>
           </div>
         </div>
@@ -168,7 +195,7 @@ export function Tasks() {
               onChange={(e) => setSearch(e.target.value)}
               onCompositionStart={(e) => e.stopPropagation()}
               onCompositionEnd={(e) => setSearch(e.target.value)}
-              placeholder="搜索任务..."
+              placeholder={t("tasks.searchPlaceholder")}
               className="flex-1 bg-transparent text-[13px] outline-none"
             />
           </div>
@@ -177,17 +204,17 @@ export function Tasks() {
             onChange={(e) => setFilterStatus(e.target.value)}
             className="input w-auto"
           >
-            <option value="all">所有状态</option>
-            <option value="todo">待办</option>
-            <option value="in_progress">进行中</option>
-            <option value="done">已完成</option>
+            <option value="all">{t("tasks.allStatus")}</option>
+            <option value="todo">{t("common.todo")}</option>
+            <option value="in_progress">{t("common.inProgress")}</option>
+            <option value="done">{t("common.doneStatus")}</option>
           </select>
           <select
             value={filterProject}
             onChange={(e) => setFilterProject(e.target.value)}
             className="input w-auto"
           >
-            <option value="all">所有项目</option>
+            <option value="all">{t("tasks.allProjects")}</option>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -213,6 +240,7 @@ export function Tasks() {
           <KanbanView
             tasks={filtered}
             projects={projects}
+            columns={columns}
             onToggle={toggleTask}
             onUpdate={async (id, status) => {
               await api.updateTask({ id, status });
@@ -228,6 +256,7 @@ export function Tasks() {
       {showCreate && (
         <TaskModal
           projects={projects}
+          dateOptions={dateOptions}
           onClose={() => setShowCreate(false)}
           onSaved={async () => {
             setShowCreate(false);
@@ -239,6 +268,7 @@ export function Tasks() {
       {editing && (
         <TaskModal
           projects={projects}
+          dateOptions={dateOptions}
           task={editing}
           onClose={() => setEditing(null)}
           onSaved={async () => {
@@ -268,11 +298,13 @@ function ListView({
   onDelete: (id: string) => void;
   onStart: (id: string) => void;
 }) {
+  const { t } = useTranslation();
+
   if (tasks.length === 0) {
     return (
       <div className="flex h-64 flex-col items-center justify-center text-[var(--text-tertiary)]">
         <Circle size={32} className="mb-3 opacity-30" />
-        <div className="text-[13px]">没有任务</div>
+        <div className="text-[13px]">{t("tasks.noTasks")}</div>
       </div>
     );
   }
@@ -281,22 +313,22 @@ function ListView({
 
   return (
     <div className="mx-auto max-w-[900px] space-y-1 rounded-2xl border border-[var(--border)] bg-[var(--bg-primary)] p-2">
-      {tasks.map((t) => {
-        const project = t.project_id ? projectMap.get(t.project_id) : null;
-        const tags = parseTags(t.tags);
+      {tasks.map((task) => {
+        const project = task.project_id ? projectMap.get(task.project_id) : null;
+        const tags = parseTags(task.tags);
         return (
           <div
-            key={t.id}
+            key={task.id}
             className="task-item group rounded-lg hover:bg-[var(--bg-hover)]"
           >
             <button
-              onClick={() => onToggle(t.id)}
+              onClick={() => onToggle(task.id)}
               className={cn(
                 "task-checkbox",
-                t.status === "done" && "checked"
+                task.status === "done" && "checked"
               )}
             >
-              {t.status === "done" && (
+              {task.status === "done" && (
                 <CheckCircle2 size={12} className="text-white" />
               )}
             </button>
@@ -305,11 +337,11 @@ function ListView({
                 <div
                   className={cn(
                     "text-[13px] truncate",
-                    t.status === "done" &&
+                    task.status === "done" &&
                       "line-through text-[var(--text-tertiary)]"
                   )}
                 >
-                  {t.title}
+                  {task.title}
                 </div>
                 {project && (
                   <span
@@ -324,17 +356,17 @@ function ListView({
                 )}
               </div>
               <div className="mt-0.5 flex items-center gap-2 text-[11px] text-[var(--text-tertiary)]">
-                {t.due_date && (
+                {task.due_date && (
                   <span
                     className={cn(
-                      isOverdue(t.due_date) && t.status !== "done"
+                      isOverdue(task.due_date) && task.status !== "done"
                         ? "text-danger"
-                        : isToday(t.due_date)
+                        : isToday(task.due_date)
                         ? "text-accent-500"
                         : ""
                     )}
                   >
-                    {t.due_date}
+                    {task.due_date}
                   </span>
                 )}
                 {tags.map((tag) => (
@@ -344,31 +376,31 @@ function ListView({
                 ))}
               </div>
             </div>
-            <span className={cn("pill", priorityColors[t.priority])}>
+            <span className={cn("pill", priorityColors[task.priority])}>
               <Flag size={10} />
-              {priorityLabel[t.priority]}
+              {t(`common.${task.priority}`)}
             </span>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              {t.status === "todo" && (
+              {task.status === "todo" && (
                 <button
-                  onClick={() => onStart(t.id)}
+                  onClick={() => onStart(task.id)}
                   className="btn btn-icon text-accent-500 hover:bg-accent-50"
-                  aria-label="开始"
+                  aria-label={t("tasks.start")}
                 >
                   <Play size={12} />
                 </button>
               )}
               <button
-                onClick={() => onEdit(t)}
+                onClick={() => onEdit(task)}
                 className="btn btn-ghost btn-icon"
-                aria-label="编辑"
+                aria-label={t("common.edit")}
               >
                 <Edit3 size={12} />
               </button>
               <button
-                onClick={() => onDelete(t.id)}
+                onClick={() => onDelete(task.id)}
                 className="btn btn-danger btn-icon"
-                aria-label="删除"
+                aria-label={t("common.delete")}
               >
                 <Trash2 size={12} />
               </button>
@@ -385,20 +417,23 @@ function ListView({
 function KanbanView({
   tasks,
   projects,
+  columns,
   onToggle,
   onUpdate,
 }: {
   tasks: Task[];
   projects: Project[];
+  columns: { id: string; label: string; color: string }[];
   onToggle: (id: string) => void;
   onUpdate: (id: string, status: string) => void;
 }) {
+  const { t } = useTranslation();
   const [dragOver, setDragOver] = useState<string | null>(null);
 
   return (
     <div className="grid grid-cols-3 gap-4 h-full">
-      {COLUMNS.map((col) => {
-        const colTasks = tasks.filter((t) => t.status === col.id);
+      {columns.map((col) => {
+        const colTasks = tasks.filter((task) => task.status === col.id);
         return (
           <div
             key={col.id}
@@ -436,43 +471,43 @@ function KanbanView({
             </div>
 
             <div className="flex-1 space-y-2 overflow-y-auto scrollbar-none">
-              {colTasks.map((t) => {
-                const project = projects.find((p) => p.id === t.project_id);
-                const tags = parseTags(t.tags);
+              {colTasks.map((task) => {
+                const project = projects.find((p) => p.id === task.project_id);
+                const tags = parseTags(task.tags);
                 return (
                   <div
-                    key={t.id}
+                    key={task.id}
                     draggable
                     onDragStart={(e) => {
-                      e.dataTransfer.setData("text/plain", t.id);
+                      e.dataTransfer.setData("text/plain", task.id);
                     }}
                     className="rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] p-3 cursor-grab active:cursor-grabbing hover:border-[var(--border-strong)] transition-all"
                   >
                     <div className="flex items-start gap-2 mb-2">
                       <button
-                        onClick={() => onToggle(t.id)}
+                        onClick={() => onToggle(task.id)}
                         className={cn(
                           "task-checkbox mt-0.5",
-                          t.status === "done" && "checked"
+                          task.status === "done" && "checked"
                         )}
                       >
-                        {t.status === "done" && (
+                        {task.status === "done" && (
                           <CheckCircle2 size={12} className="text-white" />
                         )}
                       </button>
                       <div
                         className={cn(
                           "text-[13px] flex-1",
-                          t.status === "done" && "line-through text-[var(--text-tertiary)]"
+                          task.status === "done" && "line-through text-[var(--text-tertiary)]"
                         )}
                       >
-                        {t.title}
+                        {task.title}
                       </div>
                     </div>
                     <div className="flex items-center justify-between text-[11px]">
-                      <span className={cn("pill", priorityColors[t.priority])}>
+                      <span className={cn("pill", priorityColors[task.priority])}>
                         <Flag size={10} />
-                        {priorityLabel[t.priority]}
+                        {t(`common.${task.priority}`)}
                       </span>
                       <div className="flex items-center gap-1">
                         {project && (
@@ -488,16 +523,16 @@ function KanbanView({
                         )}
                       </div>
                     </div>
-                    {t.due_date && (
+                    {task.due_date && (
                       <div
                         className={cn(
                           "mt-2 text-[10px]",
-                          isOverdue(t.due_date) && t.status !== "done"
+                          isOverdue(task.due_date) && task.status !== "done"
                             ? "text-danger"
                             : "text-[var(--text-tertiary)]"
                         )}
                       >
-                        {t.due_date}
+                        {task.due_date}
                       </div>
                     )}
                   </div>
@@ -520,6 +555,7 @@ function CalendarView({
   tasks: Task[];
   projects: Project[];
 }) {
+  const { t } = useTranslation();
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const year = currentDate.getFullYear();
@@ -537,16 +573,25 @@ function CalendarView({
 
   function tasksForDay(day: number) {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    return tasks.filter((t) => t.due_date?.startsWith(dateStr));
+    return tasks.filter((task) => task.due_date?.startsWith(dateStr));
   }
 
   const today = new Date();
+  const weekdays = [
+    t("calendar.mon"),
+    t("calendar.tue"),
+    t("calendar.wed"),
+    t("calendar.thu"),
+    t("calendar.fri"),
+    t("calendar.sat"),
+    t("calendar.sun"),
+  ];
 
   return (
     <div className="mx-auto max-w-[1000px]">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="h-section">
-          {year} 年 {month + 1} 月
+          {year} {t("calendar.year")} {month + 1} {t("calendar.month")}
         </h2>
         <div className="flex gap-1">
           <button
@@ -559,7 +604,7 @@ function CalendarView({
             onClick={() => setCurrentDate(new Date())}
             className="btn btn-secondary"
           >
-            今天
+            {t("common.today")}
           </button>
           <button
             onClick={() => setCurrentDate(new Date(year, month + 1, 1))}
@@ -572,7 +617,7 @@ function CalendarView({
 
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-primary)] p-4">
         <div className="grid grid-cols-7 mb-2">
-          {["一", "二", "三", "四", "五", "六", "日"].map((d) => (
+          {weekdays.map((d) => (
             <div
               key={d}
               className="text-center text-[11px] font-semibold text-[var(--text-tertiary)] py-2"
@@ -611,13 +656,13 @@ function CalendarView({
                   {day}
                 </div>
                 <div className="space-y-0.5 overflow-hidden">
-                  {dayTasks.slice(0, 3).map((t) => {
-                    const project = t.project_id
-                      ? projectMap.get(t.project_id)
+                  {dayTasks.slice(0, 3).map((task) => {
+                    const project = task.project_id
+                      ? projectMap.get(task.project_id)
                       : null;
                     return (
                       <div
-                        key={t.id}
+                        key={task.id}
                         className="truncate rounded px-1 py-0.5 text-[10px]"
                         style={{
                           backgroundColor: project
@@ -628,13 +673,13 @@ function CalendarView({
                             : "var(--text-secondary)",
                         }}
                       >
-                        {t.title}
+                        {task.title}
                       </div>
                     );
                   })}
                   {dayTasks.length > 3 && (
                     <div className="text-[9px] text-[var(--text-tertiary)] px-1">
-                      还有 +{dayTasks.length - 3} 项
+                      {t("calendar.moreTasks", { count: dayTasks.length - 3 })}
                     </div>
                   )}
                 </div>
@@ -651,15 +696,18 @@ function CalendarView({
 
 function TaskModal({
   projects,
+  dateOptions,
   task,
   onClose,
   onSaved,
 }: {
   projects: Project[];
+  dateOptions: { label: string; value: string }[];
   task?: Task;
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useTranslation();
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
   const [projectId, setProjectId] = useState(task?.project_id ?? "");
@@ -714,7 +762,7 @@ function TaskModal({
       <div className="w-[480px] rounded-2xl border border-[var(--border)] bg-[var(--bg-primary)] shadow-soft-lg animate-fade-in-scale">
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3">
           <h2 className="text-[14px] font-semibold">
-            {task ? "编辑任务" : "新建任务"}
+            {task ? t("tasks.editTask") : t("tasks.newTask")}
           </h2>
           <button onClick={onClose} className="btn btn-ghost btn-icon">
             <X size={14} />
@@ -724,14 +772,14 @@ function TaskModal({
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="任务标题"
+            placeholder={t("tasks.titlePlaceholder")}
             className="input"
             autoFocus
           />
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="描述（支持 Markdown）"
+            placeholder={t("tasks.descPlaceholder")}
             rows={3}
             className="input h-auto py-2"
           />
@@ -741,7 +789,7 @@ function TaskModal({
               onChange={(e) => setProjectId(e.target.value)}
               className="input"
             >
-              <option value="">无项目</option>
+              <option value="">{t("tasks.noProject")}</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -753,10 +801,10 @@ function TaskModal({
               onChange={(e) => setPriority(e.target.value)}
               className="input"
             >
-              <option value="urgent">紧急</option>
-              <option value="high">高优</option>
-              <option value="medium">中优</option>
-              <option value="low">低优</option>
+              <option value="urgent">{t("common.urgent")}</option>
+              <option value="high">{t("tasks.highPriority")}</option>
+              <option value="medium">{t("tasks.mediumPriority")}</option>
+              <option value="low">{t("tasks.lowPriority")}</option>
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -765,34 +813,66 @@ function TaskModal({
               onChange={(e) => setStatus(e.target.value)}
               className="input"
             >
-              <option value="todo">待办</option>
-              <option value="in_progress">进行中</option>
-              <option value="done">已完成</option>
+              <option value="todo">{t("common.todo")}</option>
+              <option value="in_progress">{t("common.inProgress")}</option>
+              <option value="done">{t("common.doneStatus")}</option>
             </select>
-            <input
-              type="date"
-              value={dueDate ? dueDate.substring(0, 10) : ""}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="input"
-            />
+            <div></div>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] text-[var(--text-tertiary)]">{t("tasks.dueDate")}</label>
+              {dueDate && (
+                <button
+                  type="button"
+                  onClick={() => setDueDate("")}
+                  className="text-[11px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
+                >
+                  {t("common.clear")}
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {dateOptions.map((opt) => (
+                <button
+                  key={opt.label}
+                  type="button"
+                  onClick={() => setDueDate(opt.value)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-md text-[11px] transition-colors",
+                    dueDate === opt.value
+                      ? "bg-accent-500 text-white"
+                      : "bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]"
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+              <input
+                type="date"
+                value={dueDate ? dueDate.substring(0, 10) : ""}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="input flex-1 min-w-[120px] py-1 text-[12px]"
+              />
+            </div>
           </div>
           <input
             value={tagsInput}
             onChange={(e) => setTagsInput(e.target.value)}
-            placeholder="标签（用逗号分隔）"
+            placeholder={t("tasks.tagsPlaceholder")}
             className="input"
           />
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-[var(--border)] px-5 py-3">
           <button onClick={onClose} className="btn btn-ghost">
-            取消
+            {t("common.cancel")}
           </button>
           <button
             onClick={save}
             disabled={!title.trim() || saving}
             className="btn btn-primary"
           >
-            {saving ? "保存中..." : "保存"}
+            {saving ? t("common.saving") : t("common.save")}
           </button>
         </div>
       </div>

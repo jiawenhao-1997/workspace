@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { api } from "./api";
+import { changeLanguage, SUPPORTED_LOCALES, type Locale } from "./i18n";
 import type { View, Theme } from "./types";
 
 interface AppState {
@@ -8,6 +9,9 @@ interface AppState {
 
   theme: Theme;
   setTheme: (theme: Theme) => void;
+
+  language: Locale;
+  setLanguage: (language: Locale) => void;
 
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
@@ -45,6 +49,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ theme });
     applyTheme(theme);
     api.setSetting("theme", theme).catch(() => {});
+  },
+
+  language: "zh-CN",
+  setLanguage: async (language) => {
+    set({ language });
+    await changeLanguage(language);
   },
 
   sidebarCollapsed: false,
@@ -93,11 +103,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
 export async function loadUserSettings() {
   try {
-    const [name, status, avatarColor, appName] = await Promise.all([
+    const [name, status, avatarColor, appName, language] = await Promise.all([
       api.getSetting("user_name"),
       api.getSetting("user_status"),
       api.getSetting("user_avatar_color"),
       api.getSetting("app_name"),
+      api.getSetting("language"),
     ]);
     const store = useAppStore.getState();
     if (name || status || avatarColor) {
@@ -110,9 +121,16 @@ export async function loadUserSettings() {
     if (appName) {
       store.setAppName(appName);
     }
+    if (language && isSupportedLocale(language)) {
+      store.setLanguage(language);
+    }
   } catch (e) {
     console.error("Failed to load user settings:", e);
   }
+}
+
+function isSupportedLocale(locale: string): locale is Locale {
+  return SUPPORTED_LOCALES.includes(locale as Locale);
 }
 
 export function applyTheme(theme: Theme) {

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { initTheme, loadUserSettings, useAppStore } from "./store";
+import { initI18n } from "./i18n";
 import { Sidebar } from "./components/Sidebar";
 import { MainArea } from "./components/MainArea";
 import { CommandPalette } from "./components/CommandPalette";
@@ -13,8 +14,10 @@ export default function App() {
   const setAiPanelOpen = useAppStore((s) => s.setAiPanelOpen);
 
   useEffect(() => {
-    initTheme();
-    loadUserSettings();
+    initI18n().then(() => {
+      initTheme();
+      loadUserSettings();
+    });
   }, []);
 
   // 全局快捷键

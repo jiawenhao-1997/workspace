@@ -8,6 +8,7 @@ import { CalendarPage } from "../pages/Calendar";
 import { Analytics } from "../pages/Analytics";
 import { AISettings } from "../pages/AISettings";
 import { Settings } from "../pages/Settings";
+import { Trash } from "../pages/Trash";
 
 export function MainArea() {
   const view = useAppStore((s) => s.currentView);
@@ -23,6 +24,7 @@ export function MainArea() {
       {view === "analytics" && <Analytics />}
       {view === "ai" && <AISettings />}
       {view === "settings" && <Settings />}
+      {view === "trash" && <Trash />}
     </main>
   );
 }

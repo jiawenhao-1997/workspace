@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import { api } from "../api";
 import { useAppStore } from "../store";
 import {
@@ -59,6 +60,14 @@ const PRESET_MODELS = [
     description: "阿里云百炼 API",
   },
   {
+    id: "zhipu",
+    name: "智谱AI",
+    provider: "智谱AI",
+    baseURL: "https://open.bigmodel.cn/api/paas/v4",
+    model: "glm-4-flash",
+    description: "GLM-4 系列，支持向量检索，永久免费",
+  },
+  {
     id: "custom",
     name: "自定义",
     provider: "中转 API",
@@ -105,6 +114,13 @@ function ModelLogo({ provider, size = 24 }: { provider: string; size?: number })
         <path d="M9 9.5c0-1 .5-2 1.5-2.5S13 6.5 13 7.5s-.5 2-1.5 2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
       </svg>
     ),
+    "智谱AI": (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" fill="#3863F5" />
+        <path d="M7 8h10M7 12h7M7 16h10" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
+        <circle cx="17" cy="12" r="1.5" fill="white"/>
+      </svg>
+    ),
     "中转 API": (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
         <circle cx="12" cy="12" r="10" fill="#6366F1" />
@@ -117,6 +133,7 @@ function ModelLogo({ provider, size = 24 }: { provider: string; size?: number })
 }
 
 export function AISettings() {
+  const { t } = useTranslation();
   const [selectedModel, setSelectedModel] = useState("doubao-free");
   const [baseURL, setBaseURL] = useState("");
   const [model, setModel] = useState("");
@@ -155,13 +172,9 @@ export function AISettings() {
   }
 
   async function saveSettings() {
-    if (!connected) {
-      setTestResult("error");
-      setTestMessage("请先测试连接，连接成功后再保存");
-      return;
-    }
-
     setSaving(true);
+    setTestResult(null);
+    setTestMessage("");
     try {
       await api.setSetting("ai_model_id", selectedModel);
       await api.setSetting("ai_base_url", baseURL);
@@ -169,8 +182,12 @@ export function AISettings() {
       await api.setSetting("ai_api_key", apiKey);
       await api.setSetting("ai_connected", "true");
       setConnected(true);
-    } catch (e) {
+      setTestResult("success");
+      setTestMessage(t("aiSettings.saveSuccess"));
+    } catch (e: any) {
       console.error(e);
+      setTestResult("error");
+      setTestMessage(t("aiSettings.saveFailed", { error: e?.message || String(e) }));
     } finally {
       setSaving(false);
     }
@@ -179,7 +196,7 @@ export function AISettings() {
   async function testConnection() {
     if (!baseURL || !apiKey) {
       setTestResult("error");
-      setTestMessage("请先填写 Base URL 和 API Key");
+      setTestMessage(t("aiSettings.fillRequiredFields"));
       return;
     }
 
@@ -198,7 +215,7 @@ export function AISettings() {
       });
 
       setTestResult("success");
-      setTestMessage("连接成功！可以保存使用了");
+      setTestMessage(t("aiSettings.connectionSuccess"));
       setConnected(true);
     } catch (e: any) {
       setTestResult("error");
@@ -212,7 +229,7 @@ export function AISettings() {
   async function fetchModels() {
     if (!baseURL || !apiKey) {
       setTestResult("error");
-      setTestMessage("请先填写 Base URL 和 API Key");
+      setTestMessage(t("aiSettings.fillRequiredFields"));
       return;
     }
 
@@ -234,11 +251,11 @@ export function AISettings() {
         setTestResult(null);
       } else {
         setTestResult("error");
-        setTestMessage("未找到可用模型");
+        setTestMessage(t("aiSettings.noModelsFound"));
       }
     } catch (e: any) {
       setTestResult("error");
-      setTestMessage("获取模型失败：" + e.toString());
+      setTestMessage(t("aiSettings.fetchModelsFailed", { error: e.toString() }));
     } finally {
       setFetchingModels(false);
     }
@@ -262,9 +279,9 @@ export function AISettings() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-[800px] px-8 py-8">
         <div className="mb-8">
-          <h1 className="h-display">AI 设置</h1>
+          <h1 className="h-display">{t("aiSettings.title")}</h1>
           <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
-            配置 AI 模型以启用智能助手功能
+            {t("aiSettings.subtitle")}
           </p>
         </div>
 
@@ -275,9 +292,9 @@ export function AISettings() {
               <Sparkles size={14} />
             </div>
             <div>
-              <h2 className="text-[14px] font-semibold">选择模型</h2>
+              <h2 className="text-[14px] font-semibold">{t("aiSettings.selectModel")}</h2>
               <p className="text-[11px] text-[var(--text-tertiary)]">
-                选择或自定义 AI 模型
+                {t("aiSettings.selectModelHint")}
               </p>
             </div>
           </div>
@@ -318,9 +335,9 @@ export function AISettings() {
               <Key size={14} />
             </div>
             <div>
-              <h2 className="text-[14px] font-semibold">API 配置</h2>
+              <h2 className="text-[14px] font-semibold">{t("aiSettings.apiConfig")}</h2>
               <p className="text-[11px] text-[var(--text-tertiary)]">
-                输入你的 API 凭证
+                {t("aiSettings.apiConfigHint")}
               </p>
             </div>
           </div>
@@ -328,7 +345,7 @@ export function AISettings() {
           <div className="space-y-4">
             <div>
               <label className="text-[11px] text-[var(--text-tertiary)] mb-1 block">
-                Base URL
+                {t("aiSettings.baseURL")}
               </label>
               <input
                 value={baseURL}
@@ -351,7 +368,7 @@ export function AISettings() {
 
             <div>
               <label className="text-[11px] text-[var(--text-tertiary)] mb-1 block">
-                API Key
+                {t("aiSettings.apiKey")}
               </label>
               <input
                 type="password"
@@ -364,14 +381,14 @@ export function AISettings() {
                 placeholder="sk-..."
               />
               <div className="mt-1.5 text-[11px] text-[var(--text-tertiary)]">
-                你的 API Key 仅存储在本地，不会同步到云端
+                {t("aiSettings.apiKeySecurity")}
               </div>
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-[11px] text-[var(--text-tertiary)]">
-                  模型名称
+                  {t("aiSettings.modelName")}
                 </label>
                 <button
                   onClick={fetchModels}
@@ -383,7 +400,7 @@ export function AISettings() {
                   ) : (
                     <Download size={12} />
                   )}
-                  获取模型
+                  {t("aiSettings.fetchModels")}
                 </button>
               </div>
               
@@ -393,7 +410,7 @@ export function AISettings() {
                     onClick={() => setShowModelDropdown(!showModelDropdown)}
                     className="input w-full flex items-center justify-between"
                   >
-                    <span>{model || "选择模型"}</span>
+                    <span>{model || t("aiSettings.selectModelPlaceholder")}</span>
                     {showModelDropdown ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                   </button>
                   {showModelDropdown && (
@@ -430,7 +447,7 @@ export function AISettings() {
               
               {currentPreset && currentPreset.id !== "custom" && (
                 <div className="mt-1.5 text-[11px] text-[var(--text-tertiary)]">
-                  推荐: {currentPreset.model}
+                  {t("aiSettings.recommended")}: {currentPreset.model}
                 </div>
               )}
             </div>
@@ -441,14 +458,14 @@ export function AISettings() {
         <section className="card p-5 mb-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-[14px] font-semibold">连接状态</h2>
+              <h2 className="text-[14px] font-semibold">{t("aiSettings.connectionStatus")}</h2>
               <p className="text-[11px] text-[var(--text-tertiary)]">
                 {connected ? (
                   <span className="text-success flex items-center gap-1">
-                    <Check size={12} /> 已连接
+                    <Check size={12} /> {t("aiSettings.connected")}
                   </span>
                 ) : (
-                  "请测试连接后保存"
+                  t("aiSettings.testToSave")
                 )}
               </p>
             </div>
@@ -468,14 +485,14 @@ export function AISettings() {
                 ) : (
                   <Sparkles size={14} />
                 )}
-                {connected ? "重新测试" : "测试连接"}
+                {connected ? t("aiSettings.retryTest") : t("aiSettings.testConnection")}
               </button>
               <button
                 onClick={saveSettings}
-                disabled={saving || !connected}
+                disabled={saving || !baseURL || !apiKey}
                 className={cn(
                   "btn",
-                  connected ? "btn-primary" : "btn-secondary opacity-50"
+                  baseURL && apiKey ? "btn-primary" : "btn-secondary opacity-50"
                 )}
               >
                 {saving ? (
@@ -483,7 +500,7 @@ export function AISettings() {
                 ) : (
                   <Check size={14} />
                 )}
-                保存
+                {t("common.save")}
               </button>
             </div>
           </div>
@@ -509,41 +526,48 @@ export function AISettings() {
 
         {/* 使用说明 */}
         <section className="card p-5">
-          <h2 className="text-[14px] font-semibold mb-3">使用说明</h2>
+          <h2 className="text-[14px] font-semibold mb-3">{t("aiSettings.usageGuide")}</h2>
           <div className="space-y-3 text-[12px] text-[var(--text-secondary)]">
             <div className="flex items-start gap-2">
               <span className="text-accent-500">1.</span>
               <span>
-                <strong>豆包 (免费)</strong>：使用字节跳动火山引擎 API，有免费额度限制，适合日常使用。
-                需要在{" "}
-                <a
-                  href="https://console.volcengine.com/ark"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-accent-500 hover:underline inline-flex items-center gap-1"
-                >
-                  火山引擎控制台 <ExternalLink size={12} />
-                </a>{" "}
-                获取 API Key。
+                <strong>{t("aiSettings.doubao")}</strong>：{t("aiSettings.doubaoDesc")}
               </span>
             </div>
             <div className="flex items-start gap-2">
               <span className="text-accent-500">2.</span>
               <span>
-                <strong>OpenAI / Claude</strong>：需要官方 API Key，可在官网购买信用额度。
+                <strong>{t("aiSettings.zhipu")}</strong>：{t("aiSettings.zhipuDesc")}
               </span>
             </div>
             <div className="flex items-start gap-2">
               <span className="text-accent-500">3.</span>
               <span>
-                <strong>中转 API</strong>：如使用第三方代理服务（如 NextChat、Nexus 等），
-                请填写代理提供的中转地址和 API Key。
+                <strong>{t("aiSettings.qwen")}</strong>：{t("aiSettings.qwenDesc")}
               </span>
             </div>
             <div className="flex items-start gap-2">
               <span className="text-accent-500">4.</span>
               <span>
-                <strong>安全提醒</strong>：请勿将 API Key 泄露给他人，定期更换 Key 以保障安全。
+                <strong>{t("aiSettings.openaiClaude")}</strong>：{t("aiSettings.openaiClaudeDesc")}
+              </span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-accent-500">5.</span>
+              <span>
+                <strong>{t("aiSettings.deepseek")}</strong>：{t("aiSettings.deepseekDesc")}
+              </span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-accent-500">6.</span>
+              <span>
+                <strong>{t("aiSettings.proxyApi")}</strong>：{t("aiSettings.proxyApiDesc")}
+              </span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-accent-500">7.</span>
+              <span>
+                <strong>{t("aiSettings.securityNote")}</strong>：{t("aiSettings.securityNoteDesc")}
               </span>
             </div>
           </div>
